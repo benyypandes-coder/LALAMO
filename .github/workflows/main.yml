@@ -1,102 +1,70 @@
-name: Build Kurt MotoShop V1 APK
+name: Build Kurt Dhylan Moto Shop Inventory APK
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
       - master
 
+  pull_request:
+    branches:
+      - main
+      - master
+
+  workflow_dispatch:
+
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      # 1. Checkout source code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Find project ZIP
-        shell: bash
-        run: |
-          set -e
-
-          ZIP_FILE=$(find . -maxdepth 2 -type f -iname "*.zip" | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No project ZIP file found."
-            exit 1
-          fi
-
-          echo "Found ZIP: $ZIP_FILE"
-          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
-
-      - name: Extract project ZIP
-        shell: bash
-        run: |
-          set -e
-
-          rm -rf extracted
-          mkdir extracted
-
-          unzip -q "$ZIP_FILE" -d extracted
-
-          echo "Extracted project:"
-          find extracted -maxdepth 3 -type f | sort | head -100
-
-      - name: Locate Gradle project
-        shell: bash
-        run: |
-          set -e
-
-          PROJECT_DIR=$(find extracted \
-            -type f \
-            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
-            -printf '%h\n' | head -n 1)
-
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: Could not find settings.gradle."
-            echo ""
-            echo "Files found:"
-            find extracted -maxdepth 5 -type f | sort
-            exit 1
-          fi
-
-          echo "Gradle project found:"
-          echo "$PROJECT_DIR"
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Set up JDK 17
+      # 2. Install Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
+      # 3. Install .NET
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          gradle-version: "8.9"
+          dotnet-version: '8.0.x'
 
-      - name: Build Debug APK
-        working-directory: ${{ env.PROJECT_DIR }}
+      # 4. Install MAUI Android workload
+      - name: Install MAUI Workload
         run: |
-          gradle :app:assembleDebug --no-daemon
+          dotnet workload install maui-android
 
-      - name: Prepare APK
-        shell: bash
+      # 5. Restore dependencies
+      - name: Restore Dependencies
         run: |
-          set -e
+          dotnet restore
 
-          mkdir -p output
+      # 6. Build Android APK
+      - name: Build APK
+        run: |
+          dotnet publish \
+            -f net8.0-android \
+            -c Release \
+            -p:AndroidPackageFormat=apk \
+            --no-restore
 
-          cp "${PROJECT_DIR}/app/build/outputs/apk/debug/app-debug.apk" \
-             "output/Kurt-MotoShop-V1.apk"
+      # 7. Find generated APK
+      - name: List APK Files
+        run: |
+          find . -type f -name "*.apk"
 
-          ls -lh output/Kurt-MotoShop-V1.apk
-
+      # 8. Upload APK as GitHub Artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Kurt-MotoShop-V1-APK
-          path: output/Kurt-MotoShop-V1.apk
+          name: Kurt-Dhylan-Moto-Shop-Inventory-APK
+          path: |
+            **/bin/Release/net8.0-android/**/*.apk
           if-no-files-found: error
